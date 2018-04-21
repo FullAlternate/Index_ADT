@@ -26,7 +26,11 @@ index_t *index_create(cmpfunc_t cmpfunc, hashfunc_t hashfunc){
  * Destroys the given index.  Subsequently accessing the index will
  * lead to undefined behavior.
  */
-void index_destroy(index_t *index);
+void index_destroy(index_t *index){
+    map_destroy(index->map, NULL, NULL);
+    set_destroy(index->set);
+    free(index);
+}
 
 /*
  * Adds the given path to the given index, and index the given
@@ -34,7 +38,11 @@ void index_destroy(index_t *index);
  * NOTE: It is the responsibility of index_addpath() to deallocate (free)
  *       'path' and the contents of the 'words' list.
  */
-void index_addpath(index_t *index, char *path, list_t *words);
+void index_addpath(index_t *index, char *path, list_t *words){
+    set_add(index->set, words);
+    map_put(index->map, path, index->set->words);
+
+}
 
 /*
  * Performs the given query on the given index.  If the query
