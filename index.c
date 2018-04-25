@@ -40,23 +40,29 @@ void index_destroy(index_t *index){
  */
 void index_addpath(index_t *index, char *path, list_t *words){
     set_t *tempset;
+    char *tempword;
     list_iter_t *words_iter = list_createiter(words);
-    void *tempword;
+
     while(list_hasnext(words_iter) == 1){
         tempword = list_next(words_iter);
 
-        if(map_haskey(index->map, tempword)){
+        if(map_haskey(index->map, tempword) == 1){
             tempset = map_get(index->map, tempword);       
         } else {
-            tempset = set_create(compare_strings); 
+            tempset = set_create(compare_strings);
         }
 
-        map_put(index->map, tempword, tempset);
         set_add(tempset, path);
+        map_put(index->map, tempword, tempset);
+
+        free(tempword);
+
+        
     }
     //printf("%s", (char*)tempword);
     //printf("%s", path);
 
+    free(path);
 }
 
 /*
@@ -67,10 +73,55 @@ void index_addpath(index_t *index, char *path, list_t *words){
  * will be NULL.
  */
 list_t *index_query(index_t *index, list_t *query, char **errmsg){
-       /* list_t *alist = list_create(compare_strings);
-        void *banan = "banan";
-        list_addlast(alist, banan);
-        printf("%d", list_poplast(alist));
-        list_addlast(alist, banan);
-        return alist;*/
+        
+        // Bruk set isteden så add alt i return listen tilslutt
+    char *tempquery; 
+    query_result_t *result;
+    list_iter_t *query_iter = list_createiter(query);
+
+
+    
+    set_t *tempset = set_create(compare_strings);
+
+    list_t *returnlist = list_create(compare_strings);
+
+    while(list_hasnext(query_iter) == 1){
+        tempquery = list_next(query_iter);
+        //printf("%s\n\n", tempquery);
+
+        if(map_haskey(index->map, tempquery) == 1){       
+            printf("%s\n\n", (char*)map_get(index->map, tempquery)); 
+            tempset = (tempset, map_get(index->map, tempquery));
+
+        } else {
+            return NULL;
+        }
+
+    }
+    set_iter_t *set_iter = set_createiter(tempset);
+
+    while(set_hasnext(set_iter) == 1){
+        result->path = (char*)set_next(set_iter);
+        result->score = 1;
+
+        //printf("%s\n\n", result->path);
+
+        list_addlast(returnlist, result);
+    }
+
+    return returnlist;
+        
+    /*list_t *alist = list_create(compare_strings);
+    char *banan = "banan";
+    char *eple = "eple";
+    list_addlast(alist, (void*)banan);
+    printf("%d", list_poplast(alist));
+    list_addlast(alist, (void*)banan);
+    list_addlast(alist, (void*)eple);
+    return alist;*/
+}
+
+// Pelle
+void index_dump(index_t *index){ 
+    map_dump(index->map);
 }
