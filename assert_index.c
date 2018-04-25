@@ -113,18 +113,19 @@ validate_index(index_t *ind)
             }
 
             /* Validate that the path is in the result set */
+        
             hitCount = 0;
             while (list_size (result) > 0)
             {
                 res = list_popfirst (result);
                 if(strcmp (res->path, docs[i].path) == 0)
-                {
+                {   
                     hitCount++;
                 }
                 free (res);
             }
             list_destroy (result);
-
+            
             if (hitCount == 0)
             {
                 fatal_error ("Document was not returned: term=%s path=%s", 
@@ -162,9 +163,14 @@ main (int argc, char **argv)
         {
             list_addfirst(words, strdup((char *)set_next(iter)));
         }
+
+        //list_dump(words); // Added by Jesper
+
         set_destroyiter(iter);
 	
         index_addpath(ind, strdup(docs[i].path), words);
+
+        //index_dump(ind); // Pelle
 		
         list_destroy(words);
     }
