@@ -83,7 +83,8 @@ doc_destroy(document_t *doc)
 /* Runs a series of queries and validates the index */
 void 
 validate_index(index_t *ind)
-{
+{  
+    printf("Start index\n");
     int i, hitCount;
     set_t *w;
     list_t *query;
@@ -97,6 +98,7 @@ validate_index(index_t *ind)
     /* Validate that all words returns the document */
     for (i = 0; i < NUM_DOCS; i++)
     {
+        printf("assert inside for\n\n");
         iter = set_createiter(docs[i].terms);
 
         while (set_hasnext(iter))
@@ -115,11 +117,17 @@ validate_index(index_t *ind)
             /* Validate that the path is in the result set */
         
             hitCount = 0;
+            printf("Assert set før while \n\n");
             while (list_size (result) > 0)
             {
+                printf("First: %s |Last: %s\n", tempa->path, tempb->path);
                 res = list_popfirst (result);
+                printf("hitcount før if\n\n");
+
+                printf("strcmp respath: %s|docs: %s\n\n", res->path, docs[i].path);
                 if(strcmp (res->path, docs[i].path) == 0)
                 {   
+                    printf("hitcount\n\n");
                     hitCount++;
                 }
                 free (res);
@@ -139,6 +147,7 @@ validate_index(index_t *ind)
     }
 
     list_destroy(query);
+    printf("Assert end\n\n");
 }
 
 int
