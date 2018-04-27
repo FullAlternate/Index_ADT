@@ -75,6 +75,41 @@ void index_addpath(index_t *index, char *path, list_t *words){
     printf("index_addpath end\n");
 }
 
+typedef enum {
+	TERM, OR, AND, ANDNOT
+} operator_type;
+
+static parsenode_t *parse_operator(char *term) {
+	parsenode_t *t2, *t = parse_term(context);
+	if (context->p[0] == '+') {
+		context->p++;
+		t2 = parse_expr(context);
+		return newnode(ADD, 0, t, t2);
+	}
+	else if (context->p[0] == '-') {
+		context->p++;
+		t2 = parse_expr(context);
+		return newnode(SUB, 0, t, t2);
+	}
+	return t;
+}
+
+static parsenode_t *parse_factor(char *term) {
+	if (context->p[0] == '(') {
+		parsenode_t *e;
+		context->p++;
+		e = parse_expr(context);
+		if (context->p[0] == ')')
+			context->p++;
+		else
+			fatal_error("Missing )");
+		return e;
+	}
+	else {
+		return parse_number(context);
+	}
+}
+
 /*
  * Performs the given query on the given index.  If the query
  * succeeds, the return value will be a list of paths.  If there
@@ -82,6 +117,12 @@ void index_addpath(index_t *index, char *path, list_t *words){
  * is assigned to the given errmsg pointer and the return value
  * will be NULL.
  */
+/*list_t *index_query(index_t *index, list_t *query, char **errmsg){
+    *index_term(index, )
+}*/
+
+
+
 list_t *index_query(index_t *index, list_t *query, char **errmsg){
     
         // Bruk set isteden så add alt i return listen tilslutt
@@ -91,22 +132,45 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
     list_iter_t *query_iter = list_createiter(query);
     set_iter_t *set_iter;
     set_t *tempset;
+    int operator;
 
     
-    
+    //list_t *setlist = list_create(compare_strings);
     list_t *returnlist = list_create(compare_strings);
 
     while(list_hasnext(query_iter) == 1){
         tempquery = list_next(query_iter);
-        //printf("%s\n\n", tempquery);
+        printf("%s\n\n", tempquery);
+        
+        if(compare_strings(tempquery, "ANDNOT") == 0){
+            operator = ANDNOT;
+            printf("ANDNOT RUN\n\n");
 
-        if(map_haskey(index->map, tempquery) == 1){       
-            tempset = map_get(index->map, tempquery);
+        } else if(compare_strings(tempquery, "AND") == 0){
+            opeator = AND;
+            printf("AND RUN\n\n");
+
+        } else if(compare_strings(tempquery, "OR") == 0){
+            operator = OR;
+            printf("OR RUN\n\n");
+
+        } else if(compare_strings(tempquery, "(" || compare_strings(tempquery, ")") == 0){
+            printf("() RUN\n\n");
+
         } else {
-            return NULL;
-        }
+            operator = TERM;
+            printf("word RUN\n\n");
+            if(map_haskey(index->map, tempquery) == 1){       
+                tempset = map_get(index->map, tempquery);
+                //list_addlast(setlist, tempset);
+            } else {
+                if(errmsg != NULL){
+                *errmsg = "No such word in files\n";
+                }
+                return NULL;
+            }
 
-        set_iter = set_createiter(tempset);
+            set_iter = set_createiter(tempset);
 
         while(set_hasnext(set_iter) == 1){
             query_result_t *result = malloc(sizeof(query_result_t));
@@ -117,8 +181,12 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
             list_addlast(returnlist, result);
         }
         set_destroyiter(set_iter);
-    }
+
     return returnlist;
+        }
+    }
+
+    
         
     /*list_t *alist = list_create(compare_strings);
     char *banan = "banan";
