@@ -42,6 +42,49 @@ void index_addpath(index_t *index, char *path, list_t *words);
  */
 list_t *index_query(index_t *index, list_t *query, char **errmsg);
 
+
+// Parsing functions
+
+typedef enum {
+	TERM, OR, AND, ANDNOT
+} operator_type;
+
+
+
+struct leafnode;
+typedef struct leafnode leafnode_t;
+
+struct leafnode 
+{
+    operator_type type;
+    void *elem;
+    leafnode_t *left;
+    leafnode_t *right;
+};
+
+
+static leafnode_t *newnode(operator_type type, void *elem, leafnode_t *left, leafnode_t *right);
+
+
+static leafnode_t *parse_query(char *current, list_iter_t *query_iter);
+
+
+static leafnode_t *parse_andterm(char *current, list_iter_t *query_iter);
+
+
+static leafnode_t *parse_orterm(char *current, list_iter_t *query_iter);
+
+
+static leafnode_t *parse_term(char *current, list_iter_t *query_iter);
+
+
+static leafnode_t *parse(list_t *query);
+
+
+void index_dump(index_t *index); // Pelle
+
+void dump_query(char *query); // Pelle
+
 #endif
 
 

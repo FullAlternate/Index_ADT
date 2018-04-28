@@ -64,9 +64,9 @@ void index_addpath(index_t *index, char *path, list_t *words){
             
         }
         
-        //free(tempword);
+        free(tempword);
         
-        //free(path);
+        free(path);
     }
     //printf("%s", (char*)tempword);
     //printf("%p\n", path);
@@ -75,41 +75,140 @@ void index_addpath(index_t *index, char *path, list_t *words){
     printf("index_addpath end\n");
 }
 
-typedef enum {
-	TERM, OR, AND, ANDNOT
-} operator_type;
+static leafnode_t *newnode(operator_type type, void *elem, leafnode_t *left, leafnode_t *right) {
+	leafnode_t *node = calloc(sizeof(leafnode_t), 1);
+	if (node == NULL)
+		fatal_error("out of memory");
+        
+	node->type = type;
+	node->elem = elem;
+	node->left = left;
+	node->right = right;
+	return node;
+}
 
-static parsenode_t *parse_operator(char *term) {
-	parsenode_t *t2, *t = parse_term(context);
-	if (context->p[0] == '+') {
-		context->p++;
-		t2 = parse_expr(context);
-		return newnode(ADD, 0, t, t2);
+
+/*
+query   ::= andterm
+
+        | andterm "ANDNOT" query
+*/
+static leafnode_t *parse_query(char *current, list_iter_t *query_iter){
+    char *and_not = "ANDNOT"; 
+
+	leafnode_t *a2, *a = parse_andterm(current, query_iter);
+
+	if (compare_strings(current, and_not) == 0) {
+		current = list_next(query_iter);
+        a2 = parse_query(current, query_iter);
+
+        return newnode(ANDNOT, current, a, a2);
 	}
-	else if (context->p[0] == '-') {
-		context->p++;
-		t2 = parse_expr(context);
-		return newnode(SUB, 0, t, t2);
+	
+	return a;
+}
+
+/*
+
+andterm  ::= orterm
+
+        | orterm "AND" andterm
+*/
+static leafnode_t *parse_andterm(char *current, list_iter_t *query_iter) {
+    char *and = "AND"; 
+
+	leafnode_t *o2, *o = parse_orterm(current, query_iter);
+
+	if (compare_strings(current, and) == 0) {
+        current = list_next(query_iter);
+		o2 = parse_andterm(current, query_iter);
+
+		return newnode(AND, current, o, o2);
 	}
+	
+	return o;
+}
+
+/*
+orterm  ::= term
+
+        | term "OR" orterm
+*/
+static leafnode_t *parse_orterm(char *current, list_iter_t *query_iter) {
+	char *or = "OR"; 
+
+	leafnode_t *t2, *t = parse_term(current, query_iter);
+
+	if (compare_strings(current, or) == 0) {
+        current = list_next(query_iter);
+		t2 = parse_orterm(current, query_iter);
+
+		return newnode(OR, current, t, t2);
+	}
+	
 	return t;
 }
 
-static parsenode_t *parse_factor(char *term) {
-	if (context->p[0] == '(') {
-		parsenode_t *e;
-		context->p++;
-		e = parse_expr(context);
-		if (context->p[0] == ')')
-			context->p++;
-		else
+/*
+term    ::= "(" query ")"
+        | <word>
+*/
+static leafnode_t *parse_term(char *current, list_iter_t *query_iter) {
+    char *left_bracket = "(";
+    char *right_bracket = ")";	
+
+    if (compare_strings(current, left_bracket) == 0) {
+        //Brackets
+		leafnode_t *q;
+		current = list_next(query_iter);
+		q = parse_term(current, query_iter);
+
+		if (compare_strings(current, right_bracket) == 0){
+			current = list_next(query_iter);
+        }   
+		else {
 			fatal_error("Missing )");
-		return e;
+        }
+		return q;
 	}
 	else {
-		return parse_number(context);
+        //word
+		return newnode(TERM, current, NULL, NULL);
 	}
 }
 
+static leafnode_t *parse(list_t *query) {
+	leafnode_t *result;
+    list_iter_t *query_iter = list_createiter(query);
+    char *current = list_next(query_iter);
+	result = parse_query(current, query_iter);
+
+	return result;
+}
+
+static set_t *evaluate(index_t *index, leafnode_t *term, char **errmsg) {
+    set_t *result_set;
+
+	switch(term->type) {
+		case ANDNOT:
+			return set_difference(evaluate(index, term->left, errmsg), evaluate(index, term->right, errmsg));
+		case AND:
+			return set_intersection(evaluate(index, term->left, errmsg), evaluate(index, term->right, errmsg));
+		case OR:
+			return set_union(evaluate(index, term->left, errmsg), evaluate(index, term->right, errmsg));		
+		case TERM:
+            if(map_haskey(index->map, term->elem) == 1){       
+                result_set = map_get(index->map, term->elem);
+            } else {
+                if(errmsg != NULL){
+                *errmsg = "No such word in files\n";
+                }
+                return NULL;
+            }
+			return result_set;
+		
+	}
+}
 /*
  * Performs the given query on the given index.  If the query
  * succeeds, the return value will be a list of paths.  If there
@@ -134,32 +233,18 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
     set_t *tempset;
     int operator;
 
-    
+    leafnode_t *rootnode = parse(query);
+    set_t *result_set = evaluate(index, rootnode, errmsg); 
     //list_t *setlist = list_create(compare_strings);
     list_t *returnlist = list_create(compare_strings);
 
-    while(list_hasnext(query_iter) == 1){
+    /*while(list_hasnext(query_iter) == 1){
         tempquery = list_next(query_iter);
         printf("%s\n\n", tempquery);
         
-        if(compare_strings(tempquery, "ANDNOT") == 0){
-            operator = ANDNOT;
-            printf("ANDNOT RUN\n\n");
+        
 
-        } else if(compare_strings(tempquery, "AND") == 0){
-            opeator = AND;
-            printf("AND RUN\n\n");
-
-        } else if(compare_strings(tempquery, "OR") == 0){
-            operator = OR;
-            printf("OR RUN\n\n");
-
-        } else if(compare_strings(tempquery, "(" || compare_strings(tempquery, ")") == 0){
-            printf("() RUN\n\n");
-
-        } else {
-            operator = TERM;
-            printf("word RUN\n\n");
+        printf("word RUN\n\n");
             if(map_haskey(index->map, tempquery) == 1){       
                 tempset = map_get(index->map, tempquery);
                 //list_addlast(setlist, tempset);
@@ -169,34 +254,21 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
                 }
                 return NULL;
             }
+        */
+    set_iter = set_createiter(result_set);
 
-            set_iter = set_createiter(tempset);
+    while(set_hasnext(set_iter) == 1){
+        query_result_t *result = malloc(sizeof(query_result_t));
+        result->path = set_next(set_iter);
+        result->score = 1;
+        printf("result->path: %s\n\n", result->path);
 
-        while(set_hasnext(set_iter) == 1){
-            query_result_t *result = malloc(sizeof(query_result_t));
-            result->path = set_next(set_iter);
-            result->score = 1;
-            printf("result->path: %s\n\n", result->path);
-
-            list_addlast(returnlist, result);
-        }
-        set_destroyiter(set_iter);
-
-    return returnlist;
-        }
+        list_addlast(returnlist, result);
     }
+    set_destroyiter(set_iter);
 
-    
-        
-    /*list_t *alist = list_create(compare_strings);
-    char *banan = "banan";
-    char *eple = "eple";
-    list_addlast(alist, (void*)banan);
-    printf("%d", list_poplast(alist));
-    list_addlast(alist, (void*)banan);
-    list_addlast(alist, (void*)eple);
-    return alist;*/
     printf("index_query end\n");
+    return returnlist;
 }
 
 // Pelle
