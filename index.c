@@ -64,9 +64,9 @@ void index_addpath(index_t *index, char *path, list_t *words){
             
         }
         
-        free(tempword);
+        //free(tempword);
         
-        free(path);
+        //free(path);
     }
     //printf("%s", (char*)tempword);
     //printf("%p\n", path);
@@ -76,6 +76,7 @@ void index_addpath(index_t *index, char *path, list_t *words){
 }
 
 static leafnode_t *newnode(operator_type type, void *elem, leafnode_t *left, leafnode_t *right) {
+    printf("newnode start\n");
 	leafnode_t *node = calloc(sizeof(leafnode_t), 1);
 	if (node == NULL)
 		fatal_error("out of memory");
@@ -85,6 +86,7 @@ static leafnode_t *newnode(operator_type type, void *elem, leafnode_t *left, lea
 	node->left = left;
 	node->right = right;
 	return node;
+    printf("newnode end\n");
 }
 
 
@@ -93,18 +95,22 @@ query   ::= andterm
 
         | andterm "ANDNOT" query
 */
-static leafnode_t *parse_query(char *current, list_iter_t *query_iter){
+static leafnode_t *parse_query(context_t *context){
+    printf("parse_query start | current = %s\n", context->current_elem);
     char *and_not = "ANDNOT"; 
 
-	leafnode_t *a2, *a = parse_andterm(current, query_iter);
+	leafnode_t *a2, *a = parse_andterm(context);
 
-	if (compare_strings(current, and_not) == 0) {
-		current = list_next(query_iter);
-        a2 = parse_query(current, query_iter);
-
-        return newnode(ANDNOT, current, a, a2);
+	if (compare_strings(context->current_elem, and_not) == 0) {
+		if(list_hasnext(context->current_iter) == 1){
+            context->current_elem = list_next(context->current_iter);        
+        }
+        
+        a2 = parse_query(context);
+        return newnode(ANDNOT, NULL, a, a2);
 	}
 	
+    printf("newnode end\n");
 	return a;
 }
 
@@ -114,18 +120,28 @@ andterm  ::= orterm
 
         | orterm "AND" andterm
 */
-static leafnode_t *parse_andterm(char *current, list_iter_t *query_iter) {
+static leafnode_t *parse_andterm(context_t *context) {
+    printf("parse_andterm start | current = %s\n", context->current_elem);
     char *and = "AND"; 
 
-	leafnode_t *o2, *o = parse_orterm(current, query_iter);
+	leafnode_t *o2, *o = parse_orterm(context); // her er context A
 
-	if (compare_strings(current, and) == 0) {
-        current = list_next(query_iter);
-		o2 = parse_andterm(current, query_iter);
+    printf("current_element: %s\n\n", context->current_elem);
 
-		return newnode(AND, current, o, o2);
+	if (compare_strings(context->current_elem, and) == 0) {
+        if(list_hasnext(context->current_iter) == 1){
+            context->current_elem = list_next(context->current_iter);
+            printf("context 3rd: %s\n\n\n", context->current_elem);
+
+        }
+
+        printf("AND with o: %s | o2: %s\n\n", o->elem, o2->elem);
+		o2 = parse_andterm(context); // her er context B
+        return newnode(AND, NULL, o, o2);
+        //printf("context: %s | o: %s | o2: %s", context->current_elem, (char*)o->elem, (char*)o2->elem);
+
 	}
-	
+	printf("parse_andterm end\n");
 	return o;
 }
 
@@ -134,18 +150,21 @@ orterm  ::= term
 
         | term "OR" orterm
 */
-static leafnode_t *parse_orterm(char *current, list_iter_t *query_iter) {
+static leafnode_t *parse_orterm(context_t *context) {
+    printf("parse_orterm start | context = %s\n", context->current_elem);
 	char *or = "OR"; 
 
-	leafnode_t *t2, *t = parse_term(current, query_iter);
+	leafnode_t *t2, *t = parse_term(context);
 
-	if (compare_strings(current, or) == 0) {
-        current = list_next(query_iter);
-		t2 = parse_orterm(current, query_iter);
+	if (compare_strings(context->current_elem, or) == 0) {
+        if(list_hasnext(context->current_iter) == 1){
+            context->current_elem = list_next(context->current_iter);
+        }
 
-		return newnode(OR, current, t, t2);
+		t2 = parse_orterm(context);
+        return newnode(OR, NULL, t, t2);
 	}
-	
+	printf("parse_orterm end\n");
 	return t;
 }
 
@@ -153,18 +172,26 @@ static leafnode_t *parse_orterm(char *current, list_iter_t *query_iter) {
 term    ::= "(" query ")"
         | <word>
 */
-static leafnode_t *parse_term(char *current, list_iter_t *query_iter) {
+static leafnode_t *parse_term(context_t *context) {
+    printf("parse_term start | context = %s\n", context->current_elem);
     char *left_bracket = "(";
     char *right_bracket = ")";	
 
-    if (compare_strings(current, left_bracket) == 0) {
+    printf("First try A, Second B: %s\n\n", context->current_elem);
+    if (compare_strings(context->current_elem, left_bracket) == 0) {
         //Brackets
 		leafnode_t *q;
-		current = list_next(query_iter);
-		q = parse_term(current, query_iter);
+		if(list_hasnext(context->current_iter) == 1){
+            context->current_elem = list_next(context->current_iter);
+ 
+        }
+		q = parse_term(context);
 
-		if (compare_strings(current, right_bracket) == 0){
-			current = list_next(query_iter);
+		if (compare_strings(context->current_elem, right_bracket) == 0){
+			if(list_hasnext(context->current_iter) == 1){
+                context->current_elem = list_next(context->current_iter);
+
+            }
         }   
 		else {
 			fatal_error("Missing )");
@@ -173,42 +200,82 @@ static leafnode_t *parse_term(char *current, list_iter_t *query_iter) {
 	}
 	else {
         //word
-		return newnode(TERM, current, NULL, NULL);
+        printf("parse_term end\n");
+
+        char *tmp = context->current_elem;
+
+        if(list_hasnext(context->current_iter) == 1){
+            context->current_elem = list_next(context->current_iter);
+            printf("context 2nd: %s\n\n\n", context->current_elem);
+        }
+
+        printf("First try A, Second B: %s\n\n", context->current_elem);
+		return newnode(TERM, tmp, NULL, NULL);
 	}
 }
 
 static leafnode_t *parse(list_t *query) {
+    printf("parse start\n");
 	leafnode_t *result;
-    list_iter_t *query_iter = list_createiter(query);
-    char *current = list_next(query_iter);
-	result = parse_query(current, query_iter);
-
+    context_t *context;
+    context->current_iter = list_createiter(query);
+    if(list_hasnext(context->current_iter) == 1){
+        context->current_elem = list_next(context->current_iter);
+        printf("context 1st: %s\n\n\n", context->current_elem);
+        result = parse_query(context);
+    } else {
+        return NULL;
+    }
+	
+    printf("parse end\n");
 	return result;
 }
 
 static set_t *evaluate(index_t *index, leafnode_t *term, char **errmsg) {
+    printf("evaluate start\n");
     set_t *result_set;
+    printf("term: %s |index: %p\n\n\n", term->elem, index);
 
+    printf("term->elem: %s\n", term->elem);
+    if(term->left != NULL && term->right != NULL){
+        printf("term->left->elem: %s | term->right->elem: %s\n", term->left->elem, term->right->elem);
+    }
 	switch(term->type) {
 		case ANDNOT:
+            printf("evaluate-andnot\n");
 			return set_difference(evaluate(index, term->left, errmsg), evaluate(index, term->right, errmsg));
 		case AND:
+            printf("evaluate-and\n");
 			return set_intersection(evaluate(index, term->left, errmsg), evaluate(index, term->right, errmsg));
 		case OR:
+            printf("evaluate-or\n");
 			return set_union(evaluate(index, term->left, errmsg), evaluate(index, term->right, errmsg));		
 		case TERM:
-            if(map_haskey(index->map, term->elem) == 1){       
+            printf("evaluate-term\n");
+            if(map_haskey(index->map, term->elem) == 1){    
+                printf("evaluate - map_haskey\n");   
                 result_set = map_get(index->map, term->elem);
+                printf("evaluate - map_get\n"); 
             } else {
                 if(errmsg != NULL){
-                *errmsg = "No such word in files\n";
+                    printf("Errormsg run\n");
+                    *errmsg = "No such word in files\n";
                 }
                 return NULL;
             }
+            printf("evaluate end\n");
 			return result_set;
-		
+
+		default:
+            printf("Unknown type\n");
+            if(errmsg != NULL){
+                    
+                    *errmsg = "Unknown type\n";
+                }
+                return NULL;
 	}
-}
+    
+}   
 /*
  * Performs the given query on the given index.  If the query
  * succeeds, the return value will be a list of paths.  If there
@@ -261,7 +328,7 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
         query_result_t *result = malloc(sizeof(query_result_t));
         result->path = set_next(set_iter);
         result->score = 1;
-        printf("result->path: %s\n\n", result->path);
+        //printf("result->path: %s\n\n", result->path);
 
         list_addlast(returnlist, result);
     }
