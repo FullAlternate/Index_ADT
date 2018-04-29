@@ -118,8 +118,9 @@ void index_addpath(index_t *index, char *path, list_t *words){
     }
     //printf("%s", (char*)tempword);
     //printf("%p\n", path);
-    //free(tempword);
-    //free(path);
+    free(tempword);
+    free(path);
+    list_destroyiter(words_iter);
     printf("index_addpath end\n");
 }
 
@@ -278,6 +279,8 @@ static leafnode_t *parse(list_t *query) {
     }
 	
     printf("parse end\n");
+    list_destroyiter(context->current_iter);
+
 	return result;
 }
 
@@ -376,8 +379,7 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
         result->score = result->score * idf(set_size(result_set), (double)AMOUNT_OF_FILES);
         list_addlast(returnlist, result);
     }
-    //set_destroyiter(set_iter);
-    //list_destroyiter(query_iter);
+    set_destroyiter(set_iter);
 
     printf("index_query end\n");
     list_sort(returnlist);
