@@ -50,6 +50,7 @@ void index_addpath(index_t *index, char *path, list_t *words){
     while(list_hasnext(words_iter) == 1){
         
         tempword = list_next(words_iter);
+        printf("Tempword: %s\n", tempword);
         strcpy(temppath, path);
         
         //printf("temp: %s|%s\n", temppath, path);
@@ -64,14 +65,13 @@ void index_addpath(index_t *index, char *path, list_t *words){
             
         }
         
-        //free(tempword);
         
         //free(path);
     }
     //printf("%s", (char*)tempword);
     //printf("%p\n", path);
-    //list_destroy(words);
-    //free(path);
+    free(tempword);
+    free(path);
     printf("index_addpath end\n");
 }
 
@@ -183,9 +183,10 @@ static leafnode_t *parse_term(context_t *context) {
 		leafnode_t *q;
 		if(list_hasnext(context->current_iter) == 1){
             context->current_elem = list_next(context->current_iter);
+            printf("Start bracket current_elem: %s\n", context->current_elem);
  
         }
-		q = parse_term(context);
+		q = parse_query(context);
 
 		if (compare_strings(context->current_elem, right_bracket) == 0){
 			if(list_hasnext(context->current_iter) == 1){
@@ -257,22 +258,11 @@ static set_t *evaluate(index_t *index, leafnode_t *term, char **errmsg) {
                 result_set = map_get(index->map, term->elem);
                 printf("evaluate - map_get\n"); 
             } else {
-                if(errmsg != NULL){
-                    printf("Errormsg run\n");
-                    *errmsg = "No such word in files\n";
-                }
-                return NULL;
+               return NULL;
             }
             printf("evaluate end\n");
 			return result_set;
 
-		default:
-            printf("Unknown type\n");
-            if(errmsg != NULL){
-                    
-                    *errmsg = "Unknown type\n";
-                }
-                return NULL;
 	}
     
 }   
@@ -302,6 +292,13 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
 
     leafnode_t *rootnode = parse(query);
     set_t *result_set = evaluate(index, rootnode, errmsg); 
+    if(result_set == NULL){
+         if(errmsg != NULL){
+                printf("Errormsg run\n");
+                *errmsg = "No such word in files\n";
+            }
+            return NULL;
+    }
     //list_t *setlist = list_create(compare_strings);
     list_t *returnlist = list_create(compare_strings);
 
