@@ -49,33 +49,42 @@ typedef enum {
 	TERM, OR, AND, ANDNOT
 } operator_type;
 
-
-
 struct leafnode;
 typedef struct leafnode leafnode_t;
 
 struct leafnode 
 {
     operator_type type;
-    void *elem;
+    char *elem;
     leafnode_t *left;
     leafnode_t *right;
 };
+
+struct context;
+typedef struct context context_t;
+
+struct context
+{
+	char *current_elem;
+	list_iter_t *current_iter;
+};
+
+#define AMOUNT_OF_FILES 3204
 
 
 static leafnode_t *newnode(operator_type type, void *elem, leafnode_t *left, leafnode_t *right);
 
 
-static leafnode_t *parse_query(char *current, list_iter_t *query_iter);
+static leafnode_t *parse_query(context_t *context);
 
 
-static leafnode_t *parse_andterm(char *current, list_iter_t *query_iter);
+static leafnode_t *parse_andterm(context_t *context);
 
 
-static leafnode_t *parse_orterm(char *current, list_iter_t *query_iter);
+static leafnode_t *parse_orterm(context_t *context);
 
 
-static leafnode_t *parse_term(char *current, list_iter_t *query_iter);
+static leafnode_t *parse_term(context_t *context);
 
 
 static leafnode_t *parse(list_t *query);

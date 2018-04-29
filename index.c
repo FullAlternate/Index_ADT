@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 struct index {
     map_t *map;
@@ -33,6 +34,49 @@ void index_destroy(index_t *index){
     free(index);
 }
 
+
+double tf(list_t *words, char *word){
+    list_iter_t *words_iter = list_createiter(words);
+    char *tmpword;
+    double f;
+
+    while(list_hasnext(words_iter) == 1){
+        tmpword = list_next(words_iter);
+        if (tmpword == word){
+            f++;
+        }
+    }
+    list_destroyiter(words_iter);
+    
+    double tf = (f / list_size(words));
+    return tf;
+}
+
+double idf(double S, double D){
+    double idf = D/S;
+
+    idf = log(idf);
+    return idf;
+}
+
+int compare_result_paths(void *p1, void *p2){
+    query_result_t *r1 = p1;
+    query_result_t *r2 = p2;
+    return compare_strings(r1->path, r2->path);
+}
+
+
+int compare_result_scores(void *s1, void *s2){
+    query_result_t *r1 = s1;
+    query_result_t *r2 = s2;
+
+    if (r1->score > r2->score){
+        return -1;
+    } else {
+        return 1;
+    }
+}
+
 /*
  * Adds the given path to the given index, and index the given
  * list of words under that path.
@@ -43,6 +87,7 @@ void index_addpath(index_t *index, char *path, list_t *words){
     set_t *tempset;
     char *tempword;
     char *temppath = malloc(sizeof(char) * strlen(path));
+    query_result_t *tf_result = malloc(sizeof(query_result_t));
     printf("index_addpath start\n");
     list_iter_t *words_iter = list_createiter(words);
 
@@ -50,17 +95,20 @@ void index_addpath(index_t *index, char *path, list_t *words){
     while(list_hasnext(words_iter) == 1){
         
         tempword = list_next(words_iter);
-        printf("Tempword: %s\n", tempword);
+        //printf("Tempword: %s\n", tempword);
         strcpy(temppath, path);
+
+        tf_result->path = temppath;
+        tf_result->score = tf(words, tempword);
         
         //printf("temp: %s|%s\n", temppath, path);
         if(map_haskey(index->map, tempword) == 1){
             tempset = map_get(index->map, tempword);      
-            set_add(tempset, temppath);
+            set_add(tempset, tf_result);
 
         } else {
-            set_t *newset = set_create(compare_strings);
-            set_add(newset, temppath);
+            set_t *newset = set_create(compare_result_paths);
+            set_add(newset, tf_result);
             map_put(index->map, tempword, newset);
             
         }
@@ -70,8 +118,8 @@ void index_addpath(index_t *index, char *path, list_t *words){
     }
     //printf("%s", (char*)tempword);
     //printf("%p\n", path);
-    free(tempword);
-    free(path);
+    //free(tempword);
+    //free(path);
     printf("index_addpath end\n");
 }
 
@@ -135,8 +183,9 @@ static leafnode_t *parse_andterm(context_t *context) {
 
         }
 
-        printf("AND with o: %s | o2: %s\n\n", o->elem, o2->elem);
+        
 		o2 = parse_andterm(context); // her er context B
+        printf("AND with o: %s | o2: %s\n\n", o->elem, o2->elem);
         return newnode(AND, NULL, o, o2);
         //printf("context: %s | o: %s | o2: %s", context->current_elem, (char*)o->elem, (char*)o2->elem);
 
@@ -218,7 +267,7 @@ static leafnode_t *parse_term(context_t *context) {
 static leafnode_t *parse(list_t *query) {
     printf("parse start\n");
 	leafnode_t *result;
-    context_t *context;
+    context_t *context = malloc(sizeof(context_t));
     context->current_iter = list_createiter(query);
     if(list_hasnext(context->current_iter) == 1){
         context->current_elem = list_next(context->current_iter);
@@ -262,9 +311,7 @@ static set_t *evaluate(index_t *index, leafnode_t *term, char **errmsg) {
             }
             printf("evaluate end\n");
 			return result_set;
-
-	}
-    
+	}   
 }   
 /*
  * Performs the given query on the given index.  If the query
@@ -283,15 +330,11 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
     
         // Bruk set isteden så add alt i return listen tilslutt
     
-    char *tempquery; 
     printf("index_query start\n");
-    list_iter_t *query_iter = list_createiter(query);
     set_iter_t *set_iter;
-    set_t *tempset;
-    int operator;
-
     leafnode_t *rootnode = parse(query);
     set_t *result_set = evaluate(index, rootnode, errmsg); 
+    printf("Continues from evaluate\n");
     if(result_set == NULL){
          if(errmsg != NULL){
                 printf("Errormsg run\n");
@@ -300,7 +343,7 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
             return NULL;
     }
     //list_t *setlist = list_create(compare_strings);
-    list_t *returnlist = list_create(compare_strings);
+    list_t *returnlist = list_create(compare_result_scores);
 
     /*while(list_hasnext(query_iter) == 1){
         tempquery = list_next(query_iter);
@@ -323,19 +366,20 @@ list_t *index_query(index_t *index, list_t *query, char **errmsg){
 
     while(set_hasnext(set_iter) == 1){
         query_result_t *result = malloc(sizeof(query_result_t));
-        result->path = set_next(set_iter);
-        result->score = 1;
-        //printf("result->path: %s\n\n", result->path);
+        query_result_t *tmpresult = malloc(sizeof(query_result_t));
+        tmpresult = set_next(set_iter);
 
+        result->path = tmpresult->path;
+        printf("result->path: %s\n\n", result->path);
+        result->score = tmpresult->score;
+
+        result->score = result->score * idf(set_size(result_set), (double)AMOUNT_OF_FILES);
         list_addlast(returnlist, result);
     }
-    set_destroyiter(set_iter);
+    //set_destroyiter(set_iter);
+    //list_destroyiter(query_iter);
 
     printf("index_query end\n");
+    list_sort(returnlist);
     return returnlist;
-}
-
-// Pelle
-void index_dump(index_t *index){ 
-    map_dump(index->map);
 }
